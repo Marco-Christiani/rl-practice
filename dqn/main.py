@@ -89,11 +89,11 @@ def train(
     target_net.load_state_dict(policy_net.state_dict())
     target_net.eval()  # dont update this network on backprop
 
-    # criterion = nn.MSELoss()
-    criterion = nn.SmoothL1Loss()
-    # optimizer = optim.SGD(policy_net.parameters(), lr=learning_rate)
+    criterion = nn.MSELoss()
+    # criterion = nn.SmoothL1Loss()
+    optimizer = optim.SGD(policy_net.parameters(), lr=learning_rate)
     # optimizer = torch.optim.Adam(policy_net.parameters(), lr=learning_rate)
-    optimizer = optim.RMSprop(policy_net.parameters(), lr=learning_rate)
+    # optimizer = optim.RMSprop(policy_net.parameters(), lr=learning_rate)
     prev_obs = pre_proc(env.reset())
     i = 1
     episode_length = 0
@@ -117,12 +117,12 @@ def train(
             reward /= reward_scale  # scale reward
             rb.add(obs=prev_obs, act=action, rew=reward, next_obs=next_obs,
                    done=done)
+            prev_obs = next_obs
             if done:
-                env.reset()
+                prev_obs = pre_proc(env.reset())
                 rb.on_episode_end()
                 episode_length_array.append(episode_length)
                 episode_length = 0
-            prev_obs = next_obs
             i += 1
             if i >= buffer_size:
                 loss = update_policy(policy_net,
