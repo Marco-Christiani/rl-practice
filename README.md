@@ -1,3 +1,3 @@
 # rl-practice
 
-Usage: python main.py --help
+Usage: `python main.py --help`
