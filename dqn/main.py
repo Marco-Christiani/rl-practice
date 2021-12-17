@@ -1,6 +1,7 @@
 """
 Usage: python main.py train
 """
+from typing import Dict
 
 import gym
 import torch
@@ -38,13 +39,16 @@ def compute_q_target(target_net: torch.nn.Module,
     return td_target
 
 
-def update_policy(policy_net, target_net, batch, criterion, optimizer, gamma):
+def update_policy(policy_net: nn.Module, target_net: nn.Module,
+                  batch: Dict[str, np.ndarray], criterion: nn.Module,
+                  optimizer: optim, gamma: float):
     optimizer.zero_grad()
     curr_qs = policy_net(torch.tensor(batch['obs'])).max(dim=1).values
-    target_qs = compute_q_target(target_net,
-                                 torch.Tensor(batch['obs']),
-                                 torch.Tensor(batch['done']),
-                                 torch.Tensor(batch['rew']), gamma)
+    with torch.no_grad():
+        target_qs = compute_q_target(target_net,
+                                     torch.Tensor(batch['obs']),
+                                     torch.Tensor(batch['done']),
+                                     torch.Tensor(batch['rew']), gamma)
     loss = criterion(curr_qs, target_qs)
     loss.backward()
     optimizer.step()
@@ -62,13 +66,13 @@ def update_policy(policy_net, target_net, batch, criterion, optimizer, gamma):
 @click.option("--egreedy", is_flag=True, default=False, show_default=True)
 @click.option("--load_path", default=None, show_default=True)
 def train(
-        learning_rate,
-        gamma,
-        buffer_size,
-        batch_size,
-        save_path,
-        tau,
-        reward_scale,
+        learning_rate: float,
+        gamma: float,
+        buffer_size: int,
+        batch_size: int,
+        save_path: str,
+        tau: int,
+        reward_scale: int,
         egreedy=False,
         load_path=None):
     env = gym.make("CartPole-v0")
@@ -106,12 +110,14 @@ def train(
             if egreedy:
                 action = e_greedy(i)
             if not action:
-                # select action with policy net
-                output = policy_net(prev_obs)
-                # select max q value action (argmax)
-                action = output.max(dim=0).indices.item()
+                with torch.no_grad():
+                    # select action with policy net
+                    output = policy_net(prev_obs)
+                    # select max q value action (argmax)
+                    action = output.max(dim=0).indices.item()
             action_array.append(action)
             next_obs, reward, done, info = env.step(action)
+
             episode_length += reward
             next_obs = pre_proc(next_obs)
             reward /= reward_scale  # scale reward
