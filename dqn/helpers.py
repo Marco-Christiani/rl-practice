@@ -20,10 +20,11 @@ def pre_proc(obs: np.ndarray) -> torch.Tensor:
 
 
 def e_greedy(steps: int, eps_start: float = 0.9, eps_end: float = 0.05,
-             eps_decay: float = 200) -> Optional[List[int]]:
+             eps_decay: float = 100) -> Optional[List[int]]:
     sample = random.random()
-    eps_threshold = eps_end + (eps_start - eps_end) * \
-        math.exp(-1. * steps / eps_decay)
-    if sample <= eps_threshold:
-        return random.randrange(2)
+    # eps_threshold = eps_end + (eps_start - eps_end) * \
+    #     math.exp(-1. * steps / eps_decay)
+    # if sample <= eps_threshold:
+    if sample <= 0.2:
+        return random.randint(0, 1)
     return None

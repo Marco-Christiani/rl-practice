@@ -43,13 +43,13 @@ def update_policy(policy_net: nn.Module, target_net: nn.Module,
                   batch: Dict[str, np.ndarray], criterion: nn.Module,
                   optimizer: optim, gamma: float):
     optimizer.zero_grad()
-    curr_qs = policy_net(torch.tensor(batch['obs'])).max(dim=1).values
+    curr_qs = policy_net(torch.tensor(batch['obs'])).gather(index=torch.tensor(batch['act'], dtype=torch.long), dim=1)
     with torch.no_grad():
         target_qs = compute_q_target(target_net,
-                                     torch.Tensor(batch['obs']),
+                                     torch.Tensor(batch['next_obs']),
                                      torch.Tensor(batch['done']),
                                      torch.Tensor(batch['rew']), gamma)
-    loss = criterion(curr_qs, target_qs)
+    loss = criterion(curr_qs.flatten(), target_qs)
     loss.backward()
     optimizer.step()
     return loss
@@ -61,8 +61,8 @@ def update_policy(policy_net: nn.Module, target_net: nn.Module,
 @click.option("--buffer_size", default=10000, show_default=True)
 @click.option("--batch_size", default=128, show_default=True)
 @click.option("--save_path", default="./out.pth", show_default=True)
-@click.option("--tau", default=1000, show_default=True)
-@click.option("--reward_scale", default=5, show_default=True)
+@click.option("--tau", default=100, show_default=True)
+@click.option("--reward_scale", default=100, show_default=True)
 @click.option("--egreedy", is_flag=True, default=False, show_default=True)
 @click.option("--load_path", default=None, show_default=True)
 def train(
@@ -109,10 +109,12 @@ def train(
             action = None
             if egreedy:
                 action = e_greedy(i)
-            if not action:
+                # print(action)
+            if action is None:
                 with torch.no_grad():
                     # select action with policy net
                     output = policy_net(prev_obs)
+                    # print(output)
                     # select max q value action (argmax)
                     action = output.max(dim=0).indices.item()
             action_array.append(action)
