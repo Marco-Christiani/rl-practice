@@ -9,6 +9,7 @@ import numpy as np
 import torch.nn as nn
 import time
 import torch.nn.functional as F
+from torch.utils.tensorboard import SummaryWriter
 import torch.optim as optim
 from cpprb import ReplayBuffer
 import matplotlib.pyplot as plt
@@ -56,12 +57,12 @@ def update_policy(policy_net: nn.Module, target_net: nn.Module,
 
 
 @cli.command()
-@click.option("--learning_rate", default=0.0001, show_default=True)
+@click.option("--learning_rate", default=0.001, show_default=True)
 @click.option("--gamma", default=0.98, show_default=True)
 @click.option("--buffer_size", default=10000, show_default=True)
 @click.option("--batch_size", default=128, show_default=True)
 @click.option("--save_path", default="./out.pth", show_default=True)
-@click.option("--tau", default=100, show_default=True)
+@click.option("--tau", default=1000, show_default=True)
 @click.option("--reward_scale", default=100, show_default=True)
 @click.option("--egreedy", is_flag=True, default=False, show_default=True)
 @click.option("--load_path", default=None, show_default=True)
@@ -75,6 +76,7 @@ def train(
         reward_scale: int,
         egreedy=False,
         load_path=None):
+    tb_writer = SummaryWriter("/tmp/dqn_logs")
     env = gym.make("CartPole-v0")
     rb = ReplayBuffer(buffer_size,
                       env_dict={"obs": {"shape": 4},
@@ -102,7 +104,7 @@ def train(
     i = 1
     episode_length = 0
     episode_length_array = []
-    loss_array = []
+    # loss_array = []
     action_array = []
     try:
         while episode_length < 200:
@@ -126,12 +128,17 @@ def train(
             rb.add(obs=prev_obs, act=action, rew=reward, next_obs=next_obs,
                    done=done)
             prev_obs = next_obs
+            i += 1
             if done:
                 prev_obs = pre_proc(env.reset())
                 rb.on_episode_end()
+                tb_writer.add_scalar("episode_length", episode_length, i)
+                tb_writer.add_scalar("avg_action", np.mean(action_array), i)
+                # tb_writer.flush()
                 episode_length_array.append(episode_length)
                 episode_length = 0
-            i += 1
+                action_array = []
+
             if i >= buffer_size:
                 loss = update_policy(policy_net,
                                      target_net,
@@ -139,24 +146,26 @@ def train(
                                      criterion,
                                      optimizer,
                                      gamma)
-                loss_array.append(loss.item())
+                rb.clear()
+                tb_writer.add_scalar("loss", loss, i)
+                # loss_array.append(loss.item())
 
                 if i % tau == 0:
                     # update target net every tau iterations
                     target_net.load_state_dict(policy_net.state_dict())
-
-                    print(f"avg_loss: {np.mean(loss_array):.6f}",
-                          f"avg_ep_len: {np.mean(episode_length_array):.6f}",
-                          f"n_episodes: {len(episode_length_array)}",
-                          "iter:", i,
-                          f"avg_action: {np.mean(action_array):.6f}")
-                    loss_array = []
-                    action_array = []
-                    episode_length_array = []
+                #
+                #     print(f"avg_loss: {np.mean(loss_array):.6f}",
+                #           f"avg_ep_len: {np.mean(episode_length_array):.6f}",
+                #           f"n_episodes: {len(episode_length_array)}",
+                #           "iter:", i,
+                #           f"avg_action: {np.mean(action_array):.6f}")
+                #     loss_array = []
+                #     action_array = []
+                #     episode_length_array = []
     finally:
         avg_action = np.mean(action_array)
-        avg_loss = np.mean(loss_array)
-        print(f'Done! {avg_loss=} {avg_action=}')
+        # avg_loss = np.mean(loss_array)
+        # print(f'Done! {avg_loss=} {avg_action=}')
         torch.save(target_net, save_path)
         print('Saved to', save_path)
 
